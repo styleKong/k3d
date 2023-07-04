@@ -1,0 +1,68 @@
+import K3d from '../core/index';
+import * as THREE from 'three';
+
+export default function (container) {
+  const k3d = new K3d({
+    gui: true,
+    stats: true,
+    domElement: container,
+    scene: {
+      background: 0xa0a0a0,
+      gui: true,
+    },
+    render: {
+      outputEncoding: THREE.sRGBEncoding,
+      antialias: true,
+    },
+    fog: {
+      color: 0xa0a0a0,
+      near: 10,
+      far: 50,
+      gui: true,
+    },
+    camera: {
+      type: 'PerspectiveCamera',
+      near: 1,
+      fov: 45,
+      far: 100,
+      position: [-1, 2, 3],
+      target: [0, 1, 0],
+      gui: true,
+    },
+    light: {
+      HemisphereLight: {
+        color: 0xffffff,
+        groundColor: 0x444444,
+        position: [0, 20, 0],
+      },
+      DirectionalLight: {
+        color: 0xffffff,
+        position: [3, 10, 10],
+      },
+    },
+    shadow: {
+      near: 0.1,
+      far: 40,
+    },
+    controls: {
+      target: [0, 1, 0],
+      enablePan: false,
+      enableZoom: false,
+    },
+    models: ['./models/gltf/Xbot.glb'],
+    onprogress(gltf: THREE.Mesh) {
+      k3d.mixerActions[gltf.name][1].play();
+    },
+    onload(k3d: K3d) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false })
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.receiveShadow = true;
+      k3d.scene.add(mesh);
+
+      console.log(k3d);
+    },
+  });
+}
