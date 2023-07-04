@@ -47,6 +47,7 @@ container.style.flex = '1';
 container.style.margin = '0';
 document.body.append(ul);
 document.body.append(container);
+let k3d;
 for (let index = 0; index < list.length; index++) {
   const li = document.createElement('li');
   li.style.margin = '0';
@@ -62,7 +63,7 @@ for (let index = 0; index < list.length; index++) {
   li.setAttribute('title', list[index].name);
   if (index === 3) {
     li.style.color = 'red';
-    list[index].initk3d(container);
+    k3d = list[index].initk3d(container);
   }
   li.onclick = function (ev) {
     let index: number = Number((ev.target as HTMLElement).getAttribute('data-index'));
@@ -71,7 +72,8 @@ for (let index = 0; index < list.length; index++) {
       else li.style.color = 'red';
     });
     container.innerHTML = '';
-    list[index].initk3d(container);
+    if (k3d) k3d.dispose();
+    k3d = list[index].initk3d(container);
   };
   li.textContent = list[index].name;
   ul.append(li);

@@ -11,6 +11,9 @@ export default function (container) {
       toneMappingExposure: 1,
       gui: true,
     },
+    controls: {
+      enableDamping: true,
+    },
     bloom: {
       strength: 1.5,
       radius: 0.26,
@@ -42,4 +45,5 @@ export default function (container) {
       k3d.camera.add(pointLight);
     },
   });
+  return k3d;
 }

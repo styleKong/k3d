@@ -109,7 +109,7 @@ class K3d extends Events {
     this.InitScene(option.scene);
     this.initCamera(option.camera);
     this.initLight(option.light);
-    if (option.controls) this.initControls(option.controls);
+    this.initControls(option.controls);
     this.initComposer();
     if (option.fog) this.initFog(option.fog);
     if (option.shadow) this.initShadow(option.shadow);
@@ -1039,8 +1039,7 @@ class K3d extends Events {
    * 更新渲染
    */
   animate() {
-    if (this.renderEnabled || this.timeRenderTimer) requestAnimationFrame(() => this.animate());
-
+    if ((this.renderEnabled || this.timeRenderTimer) && this.domElement) requestAnimationFrame(() => this.animate());
     this.emit('loop');
     if (this.stats) this.stats.update();
     const delta = this.clock.getDelta();
@@ -1085,6 +1084,12 @@ class K3d extends Events {
     });
     // 4. 用 finalComposer 作最后渲染
     this.finalComposer.render();
+  }
+  dispose() {
+    this.domElement = null;
+    this.scene.traverse((child: any) => {
+      child.dispose && child.dispose();
+    });
   }
 }
 export default K3d;

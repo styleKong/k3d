@@ -39,4 +39,5 @@ export default function (container) {
       k3d.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     },
   });
+  return k3d;
 }

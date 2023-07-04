@@ -12,8 +12,11 @@ export default function (container) {
       toneMappingExposure: 1,
       gui: true,
     },
+    controls: {
+      enableDamping: true,
+    },
     bloom: {
-      strength: 5,
+      strength: 1.1,
       radius: 0,
       threshold: 0,
       gui: true,
@@ -71,4 +74,5 @@ export default function (container) {
       k3d.outlineObjects.toggle(obj.object);
     }
   });
+  return k3d;
 }

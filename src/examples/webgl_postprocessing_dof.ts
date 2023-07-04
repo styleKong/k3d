@@ -110,4 +110,5 @@ export default function (container) {
       }
     }
   });
+  return k3d;
 }

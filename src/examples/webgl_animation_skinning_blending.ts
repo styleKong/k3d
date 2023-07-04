@@ -66,4 +66,5 @@ export default function (container) {
       console.log(k3d);
     },
   });
+  return k3d;
 }
