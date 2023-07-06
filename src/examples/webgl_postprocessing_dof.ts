@@ -30,7 +30,7 @@ export default function (container) {
     onload(k3d: K3d) {
       console.log(k3d);
 
-      k3d.render.autoClear = false;
+      k3d.renderer.autoClear = false;
       const path = './textures/cube/SwedishRoyalCastle/';
       const format = '.jpg';
       const urls = [

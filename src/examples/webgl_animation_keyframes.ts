@@ -8,7 +8,7 @@ export default function (container) {
     stats: true,
     domElement: container,
     scene: {
-      // background: './textures/carbon/Carbon.png',
+      // background: await new THREE.TextureLoader().loadAsync('./textures/carbon/Carbon.png'),
       background: 0xbfe3dd,
       gui: true,
     },
@@ -34,8 +34,8 @@ export default function (container) {
       k3d.mixerActions[gltf.name][0].play();
     },
     onload(k3d: K3d) {
-      k3d.render.outputEncoding = THREE.sRGBEncoding;
-      const pmremGenerator = new THREE.PMREMGenerator(k3d.render);
+      k3d.renderer.outputEncoding = THREE.sRGBEncoding;
+      const pmremGenerator = new THREE.PMREMGenerator(k3d.renderer);
       k3d.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     },
   });

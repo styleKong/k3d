@@ -38,7 +38,7 @@ export default function (container) {
         gui: true,
       },
     },
-    renderEnabled: false,
+    renderRequested: false,
     onprogress(gltf: THREE.Mesh | THREE.Group) {},
     onload(k3d: K3d) {
       setupScene();
@@ -65,7 +65,7 @@ export default function (container) {
         sphere.layers.enable(BLOOM_SCENE);
         k3d.addBloom(sphere);
       }
-      k3d.timeRender();
+      k3d.renderTimer();
     }
   }
   k3d.on('click', (obj: any) => {

@@ -28,12 +28,12 @@ import Events from './events';
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
 
 import _ from 'lodash';
-// 判断是否是颜色
-function isColor(color): boolean {
-  if (color instanceof THREE.Texture) return false;
-  if (typeof color == 'string' && /\.[a-z]{2,}$/.test(color)) return false;
-  return true;
-}
+
+const hasOwnProperty = Object.prototype.hasOwnProperty;
+type vec3 = [number, number, number];
+type camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
+type obj = { [key: string]: any };
+
 class Myset<T> extends Set<T> {
   toggle(object: T) {
     if (this.has(object)) this.delete(object);
@@ -41,29 +41,27 @@ class Myset<T> extends Set<T> {
     return true;
   }
 }
-export default class K3d extends Events {
-  /**
-   * 场景父元素
-   */
-  domElement!: HTMLElement;
-  width!: number;
-  height!: number;
-  clock!: THREE.Clock;
+class K3d extends Events {
+  BLOOM_SCENE = 1;
+  TWEEN = TWEEN;
+  scene: THREE.Scene = new THREE.Scene();
+  clock: THREE.Clock = new THREE.Clock();
   stats?: Stats;
   gui?: GUI;
-  renderer!: THREE.WebGLRenderer;
+  domElement: HTMLElement = document.body;
+  width: number = window.innerWidth;
+  height: number = window.innerHeight;
+  render!: THREE.WebGLRenderer;
   css2dRenderer!: CSS2DRenderer;
   css3dRenderer!: CSS3DRenderer;
-  scene!: THREE.Scene;
-  camera!: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  camera!: camera;
   directionalLight?: THREE.DirectionalLight;
   ambientLight?: THREE.AmbientLight;
   hemisphereLight?: THREE.HemisphereLight;
   controls!: OrbitControls;
-  sky?: THREE.Texture;
   fog?: THREE.Fog;
-  BLOOM_SCENE = 1;
-  TWEEN = TWEEN;
+  private timeRenderTimer?: number;
+  _renderEnabled: boolean = true;
   mixers: THREE.AnimationMixer[] = [];
   mixerActions: { [a: string]: THREE.AnimationAction[] } = {};
   renderScene!: RenderPass;
@@ -79,230 +77,179 @@ export default class K3d extends Events {
   modes: THREE.Mesh[] = [];
   onload?: (k3d: K3d) => void;
   onprogress?: (gltf: THREE.Mesh) => void;
-  _onresize = () => this.onresize();
-  private _renderRequested: boolean = true; // 缓存renderRequested的状态
-  /**
-   * 设置renderRequested为true 时 执行动画帧
-   */
-  set renderRequested(val) {
-    this._renderRequested = val;
-    if (val) this.animate();
+  set renderEnabled(val) {
+    this._renderEnabled = val;
+    if (val) this.timeRender();
   }
-  get renderRequested() {
-    return this._renderRequested;
+  get renderEnabled() {
+    return this._renderEnabled;
   }
-  constructor(config: k3dParam) {
+  constructor(option: k3dParam) {
     super();
-    this.domElement = this.getDomElement(config.domElement);
-    this.clock = new THREE.Clock();
-    if (config.stats) {
+    this.getDomElement(option.domElement);
+    if (!WebGL.isWebGLAvailable()) {
+      const warning = WebGL.getWebGLErrorMessage();
+      this.domElement && this.domElement.appendChild(warning);
+      return;
+    }
+    if (option.renderEnabled === false) this.renderEnabled = option.renderEnabled;
+    // 加载完成更新渲染
+    if (!this.renderEnabled) THREE.DefaultLoadingManager.onLoad = () => this.timeRender();
+    if (option.stats) {
       this.stats = new Stats();
       this.domElement.append(this.stats.dom);
     }
-    if (config.gui) {
-      this.gui = new GUI();
-      // 当gui发生变化时且未执行动画帧时 执行render
-      this.gui.onChange(() => !this.renderRequested && this.renderTimer());
-    }
-    this.renderer = this.initRenderer(config.render);
-    this.scene = this.initScene(config.scene);
-    // 添加天空盒
-    if (config.sky) this.initSky(config.sky);
-    if (config.fog) this.fog = this.initFog(config.fog);
-    this.camera = this.initCamera(config.camera);
-    if (config.light) this.initLight(config.light);
-    this.controls = this.initControls(config.controls);
-
-    if (config.filter) this.initBSC(config.filter);
-    if (config.bloom) this.initBloom(config.bloom);
-    // 景深一定放在辉光后面
-    if (config.dof) this.initDof(config.dof);
-    if (config.outline) this.initOutLine(config.outline);
-    if (config.onload) this.onload = config.onload;
-    if (config.onprogress) this.onprogress = config.onprogress;
-    if (_.has(config, 'renderRequested')) this.renderRequested = !!config.renderRequested;
-    if (config.models) this.modelLoads(config.models);
-    // 此处使用异步方法执行onload
-    else
-      Promise.resolve().then(() => {
-        if (!this.renderRequested) this.renderTimer();
-        else this.animate();
-        this.onload && this.onload(this);
+    if (option.gui) {
+      this.gui = new GUI({ title: 'K3d参数调节' });
+      this.gui.onChange(() => {
+        if (!this.renderEnabled) this.timeRender();
       });
-
-    window.addEventListener('resize', this._onresize);
-  }
-  /**
-   *  获取场景父级元素
-   * @param domElement
-   */
-  getDomElement(domElement: string | HTMLElement): HTMLElement {
-    let dom: HTMLElement = typeof domElement === 'string' ? document.querySelector(domElement) : domElement;
-    if (!dom) {
-      dom = document.body;
-      dom.style.width = '100%';
-      dom.style.height = '100vh';
     }
-    this.width = dom.clientWidth || window.innerWidth;
-    this.height = dom.clientHeight || window.innerHeight;
-    return dom;
+    this.InitRender(option.render);
+    this.InitScene(option.scene);
+    this.initCamera(option.camera);
+    this.initLight(option.light);
+    this.initControls(option.controls);
+    this.initComposer();
+    if (option.fog) this.initFog(option.fog);
+    if (option.shadow) this.initShadow(option.shadow);
+    if (option.filter) this.initBSC(option.filter);
+    if (option.bloom) this.initBloom(option.bloom);
+    // 景深一定放在辉光后面
+    if (option.dof) this.initDof(option.dof);
+    if (option.outline) this.initOutLine(option.outline);
+    if (option.models) this.modelLoads(option.models);
+    // 此处使用异步方法执行onload
+    else Promise.resolve().then(option.onload.bind(this, this));
+    this.animate();
+    if (option.onload) this.onload = option.onload;
+    if (option.onprogress) this.onprogress = option.onprogress;
+    window.addEventListener(
+      'resize',
+      _.debounce(() => this.onresize(option.camera), 150)
+    );
+    // 绑定事件
+    this.bindEvent();
   }
   /**
-   *  初始化渲染器
-   * @param config k3d.WebGLRendererParameters
-   * @returns THREE.WebGLRenderer
+   *  获取放置场景dom元素,默认body
+   *  @param domElement class|id|dom
+   **/
+  getDomElement(domElement: string | HTMLElement) {
+    if (typeof domElement === 'string') this.domElement = document.querySelector(domElement) as HTMLElement;
+    else this.domElement = domElement;
+    if (!this.domElement) {
+      this.domElement = document.body;
+      this.domElement.style.width = '100%';
+      this.domElement.style.height = '100vh';
+    }
+    this.width = this.domElement?.clientWidth || window.innerWidth;
+    this.height = this.domElement?.clientHeight || window.innerHeight;
+  }
+  /**
+   * 初始化渲染器
+   * 参数 {@link THREE.WebGLRendererParameters}
    */
-  initRenderer(config: k3d.WebGLRendererParameters = {}): THREE.WebGLRenderer {
-    const configs = [
-      'autoClear',
-      'autoClearColor',
-      'autoClearDepth',
-      'autoClearStencil',
-      'outputColorSpace',
-      'localClippingEnabled',
-      'clippingPlanes',
-      'useLegacyLights',
-      'sortObjects',
-      'toneMapping',
-      'toneMappingExposure',
-    ];
-    const renderer = new THREE.WebGLRenderer(_.omit(config, [...configs, 'gui']));
+  InitRender(parameters: k3d.WebGLRendererParameters = {}) {
+    this.render = new THREE.WebGLRenderer(
+      _.omit(parameters, ['outputColorSpace', 'toneMapping', 'toneMappingExposure'])
+    );
     // 设置this.reader分辨率
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(this.width | 0, this.height | 0);
-    this.domElement.appendChild(renderer.domElement);
-    // 设置配置项
-    for (let key in _.pick(config, configs)) {
-      if (_.has(renderer, key)) renderer[key] = config[key];
+    this.render.setPixelRatio(window.devicePixelRatio);
+    this.render.setSize(this.width | 0, this.height | 0);
+    this.domElement.appendChild(this.render.domElement);
+    if (
+      hasOwnProperty.call(parameters, 'outputColorSpace') &&
+      parameters.outputColorSpace &&
+      hasOwnProperty.call(this.render, 'outputColorSpace')
+    ) {
+      (this.render as Record<any, any>).outputColorSpace = parameters.outputColorSpace;
     }
-    if (config.gui) {
-      const rendererGui = this.gui.addFolder('renderer');
-      if (!config.toneMappingExposure) config.toneMappingExposure = 1;
-      rendererGui
-        .add(config, 'toneMappingExposure')
-        .step(0.001)
-        .onChange((value) => {
-          renderer.toneMappingExposure = value;
-        });
+    if (hasOwnProperty.call(parameters, 'outputEncoding') && parameters.outputEncoding) {
+      this.render.outputEncoding = parameters.outputEncoding;
     }
-    this.initCSS2DRenderer();
-    this.initCSS2DRenderer();
-    return renderer;
+    if (parameters.toneMapping) this.render.toneMapping = parameters.toneMapping;
+    if (parameters.toneMappingExposure) this.render.toneMappingExposure = Math.pow(parameters.toneMappingExposure, 4.0);
+
+    if (parameters.gui) {
+      const renderGui = this.gui.addFolder('render');
+      if (parameters.toneMappingExposure)
+        renderGui
+          .add(parameters, 'toneMappingExposure', 0.1, 2)
+          .step(0.001)
+          .onChange((value) => {
+            this.render.toneMappingExposure = Math.pow(value, 4.0);
+          });
+    }
   }
-  /**
-   * 创建css2d渲染器
-   */
-  initCSS2DRenderer() {
-    this.css2dRenderer = new CSS2DRenderer();
-    this.css2dRenderer.setSize(this.width, this.height);
-    this.css2dRenderer.domElement.style.position = 'absolute';
-    this.css2dRenderer.domElement.style.top = '0px';
-    this.css2dRenderer.domElement.style.margin = '0';
-    this.domElement.appendChild(this.css2dRenderer.domElement);
-  }
-  /**
-   * 创建css3d渲染器
-   */
-  initCSS3DRenderer() {
-    this.css3dRenderer = new CSS3DRenderer();
-    this.css3dRenderer.setSize(this.width, this.height);
-    this.css3dRenderer.domElement.style.position = 'absolute';
-    this.css3dRenderer.domElement.style.top = '0px';
-    this.css3dRenderer.domElement.style.zIndex = '2';
-    this.css3dRenderer.domElement.style.margin = '0';
-    this.domElement.appendChild(this.css3dRenderer.domElement);
-  }
-  /**
-   * 创建css2d面板
-   * @param option
-   * @returns
-   */
-  css2d(option: {
-    html: string;
-    target?: THREE.Group;
-    position?: k3d.numberArray3;
-    center?: [number, number];
-    className?: string;
-  }): CSS2DObject {
-    if (!this.css2dRenderer) this.initCSS2DRenderer();
-    const { html, target = this.scene, position = [0, 0, 0], center = [0, 0], className = 'k3d-plane' } = option;
-    const div = document.createElement('div');
-    div.className = className;
-    div.innerHTML = html;
-    const css2dLabel = new CSS2DObject(div);
-    css2dLabel.position.set(...position);
-    (css2dLabel as Record<any, any>).center.set(...center);
-    target.add(css2dLabel);
-    return css2dLabel;
-  }
-  /**
-   * 创建css3d面板
-   * @param option
-   * @returns
-   */
-  css3d(option: {
-    html: string;
-    target?: THREE.Group;
-    position?: k3d.numberArray3;
-    className?: string;
-    scale?: k3d.numberArray3;
-    rotation?: k3d.numberArray3;
-  }): CSS3DObject {
-    if (!this.css2dRenderer) this.initCSS2DRenderer();
-    const { html, target = this.scene, position = [0, 0, 0], className = 'k3d-plane', scale = [1, 1, 1] } = option;
-    const div = document.createElement('div');
-    div.className = className;
-    div.innerHTML = html;
-    const css3dLabel = new CSS3DObject(div);
-    css3dLabel.position.set(...position);
-    css3dLabel.scale.set(...scale);
-    target.add(css3dLabel);
-    return css3dLabel;
-  }
+
   /**
    * 初始化场景
-   * @param config
-   * @returns THREE.Scene
+   *
    */
-  initScene(config: k3d.SceneParameters): THREE.Scene {
-    const scene = new THREE.Scene();
-    if (!config) return scene;
-    let param = {
-      background: null,
-      backgroundBlurriness: 0,
-    };
-    config = Object.assign(param, config);
+  InitScene(config: k3d.SceneParameters = {}) {
+    this.scene = new THREE.Scene();
     if (config.background) {
-      if (isColor(config.background)) {
-        // 场景背景是颜色时
-        scene.background = new THREE.Color(config.background as k3d.color);
-      } else {
-        if (config.background instanceof THREE.Texture) scene.background = config.background;
-        // 场景背景是图片时，如果时天空盒，使用sky实现
-        else
-          textureLoader(config.background as string, (textrue) => {
-            scene.background = textrue;
+      // 背景时纹理时
+      if (config.background instanceof THREE.Texture) {
+        this.scene.background = config.background;
+      }
+
+      if (typeof config.background == 'string') {
+        if (/\.[a-z]{2,}$/.test(config.background as string)) {
+          // 如果背景为图片,默认纹理使用网格的坐标来进行映射
+          textureLoader(config.background as string, (texture) => {
+            this.scene.background = texture;
+            this.scene.environment = texture;
           });
+        } else {
+          // 背景为颜色
+          this.scene.background = new THREE.Color(config.background);
+        }
+      }
+      // 背景模糊度
+      if (!config.backgroundBlurriness) config.backgroundBlurriness = 0;
+      this.scene.backgroundBlurriness = config.backgroundBlurriness;
+    }
+
+    // 当背景为图片或颜色时
+    // 环境贴图
+    if (config.environment) {
+      if (typeof config.environment == 'string')
+        textureLoader(config.environment as string, (texture) => {
+          this.scene.environment = texture;
+        });
+      else if ((config.environment as THREE.Texture).isTexture) {
+        this.scene.environment = config.environment as THREE.Texture;
       }
     }
+    // 图行参数调节
     if (config.gui) {
       const sceneGui = this.gui.addFolder('scene');
-      if (isColor(config.background) || config.background === null)
-        sceneGui.addColor(config, 'background').onChange((val) => {
-          scene.background = new THREE.Color(val);
+      if (
+        config.background &&
+        !(typeof config.background == 'string' && /\.[a-z]{2,}$/.test(config.background as string))
+      ) {
+        sceneGui.addColor(config, 'background').onChange((value) => {
+          this.scene.background = new THREE.Color(value);
+        });
+      }
+      sceneGui
+        .add(config, 'backgroundBlurriness', 0, 1)
+        .step(0.01)
+        .onChange((value) => {
+          this.scene.backgroundBlurriness = value;
         });
     }
-    return scene;
   }
 
   /**
    * 初始化摄像机
    */
-  initCamera(config: k3d.CameraParameters = {}): THREE.PerspectiveCamera | THREE.OrthographicCamera {
+  initCamera(config: k3d.CameraParameters = {}) {
     console.log('camera');
     if (!config.type) config.type = 'PerspectiveCamera';
     const { near = 1, far = 1000, position = [0, 0, 0], target = [0, 0, 0] } = config;
-    let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
     if (config.type === 'OrthographicCamera') {
       // 正交相机
       const {
@@ -311,20 +258,20 @@ export default class K3d extends Events {
         top = this.height / 2,
         bottom = this.height / -2,
       } = config as k3d.OrthographicCameraParameters;
-      camera = new THREE.OrthographicCamera(left, right, top, bottom, near, far);
+      this.camera = new THREE.OrthographicCamera(left, right, top, bottom, near, far);
     } else if (config.type == 'PerspectiveCamera') {
       // 透视相机
       const { fov = 50, aspect = this.width / this.height } = config as k3d.PerspectiveCameraParameters;
-      camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
       if ((config as k3d.PerspectiveCameraParameters).focus)
-        camera.focus = (config as k3d.PerspectiveCameraParameters).focus;
+        this.camera.focus = (config as k3d.PerspectiveCameraParameters).focus;
     } else throw new Error('k3d中未实现"' + config.type + '"相机，请自行实现');
-    if (config.zoom) camera.zoom = config.zoom;
-    camera.position.set(...(position as k3d.numberArray3));
-    camera.lookAt(...(target as k3d.numberArray3));
+    if (config.zoom) this.camera.zoom = config.zoom;
+    this.camera.position.set(...(position as vec3));
+    this.camera.lookAt(...(target as vec3));
     // 更新摄像机投影矩阵。在任何参数被改变以后必须被调用
-    camera.updateProjectionMatrix();
-    this.scene.add(camera);
+    this.camera.updateProjectionMatrix();
+    this.scene.add(this.camera);
     // 图形调节参数
     if (config.gui) {
       const cameraGui = this.gui.addFolder('camera');
@@ -334,8 +281,8 @@ export default class K3d extends Events {
           .add(config, 'fov')
           .step(0.01)
           .onChange((value) => {
-            (camera as THREE.PerspectiveCamera).fov = value;
-            camera.updateProjectionMatrix();
+            (this.camera as THREE.PerspectiveCamera).fov = value;
+            this.camera.updateProjectionMatrix();
           });
       }
       if (!config.near) config.near = 1;
@@ -343,26 +290,25 @@ export default class K3d extends Events {
         .add(config, 'near')
         .step(0.01)
         .onChange((value) => {
-          camera.near = value;
-          camera.updateProjectionMatrix();
+          this.camera.near = value;
+          this.camera.updateProjectionMatrix();
         });
       if (!config.far) config.far = 1000;
       cameraGui
         .add(config, 'far')
         .step(0.01)
         .onChange((value) => {
-          camera.far = value;
-          camera.updateProjectionMatrix();
+          this.camera.far = value;
+          this.camera.updateProjectionMatrix();
         });
     }
-    return camera;
   }
 
   // 创建光源
   initLight(config: k3d.LightParameters = {}) {
-    if (_.has(config, 'AmbientLight')) this.initAmbientLight(config.AmbientLight);
-    if (_.has(config, 'DirectionalLight')) this.initDirectionalLight(config.DirectionalLight);
-    if (_.has(config, 'HemisphereLight')) this.initHemisphereLight(config.HemisphereLight);
+    if (hasOwnProperty.call(config, 'AmbientLight')) this.initAmbientLight(config.AmbientLight);
+    if (hasOwnProperty.call(config, 'DirectionalLight')) this.initDirectionalLight(config.DirectionalLight);
+    if (hasOwnProperty.call(config, 'HemisphereLight')) this.initHemisphereLight(config.HemisphereLight);
   }
   /**
    * 创建环境光
@@ -372,7 +318,7 @@ export default class K3d extends Events {
     console.log('AmbientLight');
     const { position = [0, 0, 0], color = '#ffffff', intensity = 1 } = config;
     const light = new THREE.AmbientLight(color, intensity);
-    light.position.set(...(position as k3d.numberArray3));
+    light.position.set(...(position as vec3));
     this.ambientLight = light;
     this.scene.add(light);
     if (config.gui) {
@@ -400,9 +346,9 @@ export default class K3d extends Events {
     const light = new THREE.DirectionalLight(color, intensity);
     if (target) {
       light.target = new THREE.Object3D();
-      light.target.position.set(...(target as k3d.numberArray3));
+      light.target.position.set(...(target as vec3));
     }
-    light.position.set(...(position as k3d.numberArray3));
+    light.position.set(...(position as vec3));
     this.directionalLight = light;
     this.scene.add(light);
     if (config.gui) {
@@ -428,7 +374,7 @@ export default class K3d extends Events {
     console.log('HemisphereLight');
     const { position = [0, 0, 0], color = 0xffffff, groundColor = 0xffffff, intensity = 1 } = config;
     const light = new THREE.HemisphereLight(color, groundColor, intensity);
-    light.position.set(...(position as k3d.numberArray3));
+    light.position.set(...(position as vec3));
     this.hemisphereLight = light;
     this.scene.add(light);
     if (config.gui) {
@@ -455,17 +401,15 @@ export default class K3d extends Events {
    * 创建控制器
    */
   initControls(config: k3d.ControlsParameters = {}) {
-    const render = this.css3dRenderer || this.css2dRenderer || this.renderer;
-    console.log(config);
+    const render = this.css3dRenderer || this.css2dRenderer || this.render;
     const controls: OrbitControls = new OrbitControls(this.camera, render.domElement);
-
     if (config.target) {
-      controls.target.set(...(config.target as k3d.numberArray3));
+      controls.target.set(...(config.target as vec3));
       delete config.target;
     }
     for (const key in config) {
-      if (_.has(config, key) && _.has(controls, key)) {
-        controls[key] = config[key];
+      if (hasOwnProperty.call(config, key) && hasOwnProperty.call(controls, key)) {
+        (controls as obj)[key] = config[key];
       }
     }
     controls.mouseButtons = {
@@ -475,7 +419,11 @@ export default class K3d extends Events {
     };
     controls.update();
     // 控制器变化更新渲染
-    controls.addEventListener('change', () => !this.renderRequested && this.renderTimer());
+    if (!this.renderEnabled)
+      controls.addEventListener('change', () => {
+        this.timeRender();
+      });
+    this.controls = controls;
     if (config.gui) {
       const controlsGui = this.gui.addFolder('controls');
       if (!_.has(config, 'autoRotate')) config.autoRotate = false;
@@ -594,69 +542,125 @@ export default class K3d extends Events {
           });
       }
     }
-    return controls;
   }
-  /**
-   * 创建天空盒
-   * @param urls string | string[]
-   * @returns THREE.Texture
-   */
-  initSky(urls: string | string[]) {
-    if (typeof urls == 'string' || urls.length == 1) {
-      let url = typeof urls == 'string' ? urls : urls[0];
-      textureLoader(url, (texture) => {
-        const rt = new THREE.WebGLCubeRenderTarget(texture.image.height);
-        rt.fromEquirectangularTexture(this.renderer, texture);
-        this.scene.background = rt.texture;
-        this.sky = rt.texture;
+  modelLoad(url: string): Promise<THREE.Mesh> {
+    return new Promise((reslove, reject) => {
+      try {
+        modeLoader(url, (mode, mixer, mixerActions) => {
+          if (mixer) this.mixers.push(mixer);
+          if (mixerActions) this.mixerActions[mode.name] = mixerActions;
+          this.scene.add(mode);
+          mode.traverse((child: any) => {
+            if (child.isMesh && this.render?.shadowMap?.enabled) {
+              child.castShadow = true;
+              child.receiveShadow = false;
+            }
+          });
+          this.modes.push(mode);
+          reslove(mode);
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+  modelLoads(urls: string | string[]) {
+    const load = async (url: string) => {
+      let mode: THREE.Mesh = await this.modelLoad(url);
+      if (typeof this.onprogress === 'function') this.onprogress(mode);
+    };
+    if (typeof urls == 'string') {
+      load(urls).then(() => {
+        if (typeof this.onload === 'function') this.onload(this);
       });
     } else {
-      const loader = new THREE.CubeTextureLoader();
-      const texture = loader.load([
-        'resources/images/cubemaps/computer-history-museum/pos-x.jpg',
-        'resources/images/cubemaps/computer-history-museum/neg-x.jpg',
-        'resources/images/cubemaps/computer-history-museum/pos-y.jpg',
-        'resources/images/cubemaps/computer-history-museum/neg-y.jpg',
-        'resources/images/cubemaps/computer-history-museum/pos-z.jpg',
-        'resources/images/cubemaps/computer-history-museum/neg-z.jpg',
-      ]);
-      this.scene.background = texture;
-      this.sky = texture;
+      let loads = [];
+      for (const iterator of urls) {
+        loads.push(load(iterator));
+      }
+      Promise.all(loads).then(() => {
+        if (typeof this.onload === 'function') this.onload(this);
+      });
     }
+  }
+  initCSS2DRenderer() {
+    this.css2dRenderer = new CSS2DRenderer();
+    this.css2dRenderer.setSize(this.width, this.height);
+    this.css2dRenderer.domElement.style.position = 'absolute';
+    this.css2dRenderer.domElement.style.top = '0px';
+    this.css2dRenderer.domElement.style.margin = '0';
+    this.domElement.appendChild(this.css2dRenderer.domElement);
+  }
+  initCSS3DRenderer() {
+    this.css3dRenderer = new CSS3DRenderer();
+    this.css3dRenderer.setSize(this.width, this.height);
+    this.css3dRenderer.domElement.style.position = 'absolute';
+    this.css3dRenderer.domElement.style.top = '0px';
+    this.css3dRenderer.domElement.style.zIndex = '2';
+    this.css3dRenderer.domElement.style.margin = '0';
+    this.domElement.appendChild(this.css3dRenderer.domElement);
+  }
+  css2d(option: {
+    html: string;
+    target?: THREE.Group;
+    position?: vec3;
+    center?: [number, number];
+    className?: string;
+  }): CSS2DObject {
+    if (!this.css2dRenderer) this.initCSS2DRenderer();
+    const { html, target = this.scene, position = [0, 0, 0], center = [0, 0], className = 'k3d-plane' } = option;
+    const div = document.createElement('div');
+    div.className = className;
+    div.innerHTML = html;
+    const css2dLabel = new CSS2DObject(div);
+    css2dLabel.position.set(...position);
+    (css2dLabel as Record<any, any>).center.set(...center);
+    target.add(css2dLabel);
+    return css2dLabel;
+  }
+
+  css3d(option: {
+    html: string;
+    target?: THREE.Group;
+    position?: vec3;
+    className?: string;
+    scale?: vec3;
+    rotation?: vec3;
+  }): CSS3DObject {
+    if (!this.css2dRenderer) this.initCSS2DRenderer();
+    const { html, target = this.scene, position = [0, 0, 0], className = 'k3d-plane', scale = [1, 1, 1] } = option;
+    const div = document.createElement('div');
+    div.className = className;
+    div.innerHTML = html;
+    const css3dLabel = new CSS3DObject(div);
+    css3dLabel.position.set(...position);
+    css3dLabel.scale.set(...scale);
+    target.add(css3dLabel);
+    return css3dLabel;
   }
   /**
    * 创建雾
    */
-  initFog(option: k3d.FogParameters = {}): THREE.Fog {
-    let param = {
-      color: '#ffffff',
-      near: 1,
-      far: 1000,
-    };
-    option = Object.assign(param, option);
-    const fog = new THREE.Fog(option.color, option.near, option.far);
-    this.scene.fog = fog;
+  initFog(option: k3d.FogParameters) {
+    let { color = '#ffffff', near = 1, far = 1000 } = option;
+    this.fog = new THREE.Fog(color, near, far);
+    this.scene.fog = this.fog;
     if (option.gui) {
       const fogGui = this.gui.addFolder('fog');
-      fogGui.addColor(option, 'color').onChange((val) => fog.color.set(val));
-      fogGui
-        .add(option, 'near')
-        .step(0.01)
-        .onChange((val) => (fog.near = val));
-      fogGui
-        .add(option, 'far')
-        .step(0.01)
-        .onChange((val) => (fog.far = val));
+      if (!option.color) option.color = '#ffffff';
+      fogGui.addColor(option, 'color').onChange((val) => {
+        this.fog.color.set(val);
+      });
+      fogGui.add(this.fog, 'near').step(0.01);
+      fogGui.add(this.fog, 'far').step(0.01);
     }
-    return fog;
   }
-
   /**
    * 创建阴影
    * @param option
    */
   initShadow(option: k3d.ShadowParameters) {
-    this.renderer.shadowMap.enabled = true;
+    this.render.shadowMap.enabled = true;
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.mapSize.width = option.size || 512;
     this.directionalLight.shadow.mapSize.height = option.size || 512;
@@ -666,32 +670,6 @@ export default class K3d extends Events {
     this.directionalLight.shadow.camera.bottom = option.bottom || -2;
     this.directionalLight.shadow.camera.left = option.left || -2;
     this.directionalLight.shadow.camera.right = option.right || 2;
-  }
-  /**
-   * 加载模型
-   */
-  modelLoads(urls: string | string[]) {
-    const load = async (url: string) => {
-      let mode: THREE.Mesh = await this.modelLoad(url);
-      if (typeof this.onprogress === 'function') this.onprogress(mode);
-    };
-    if (typeof urls == 'string') {
-      load(urls).then(() => {
-        if (!this.renderRequested) this.renderTimer();
-        else this.animate();
-        if (typeof this.onload === 'function') this.onload(this);
-      });
-    } else {
-      let loads = [];
-      for (const iterator of urls) {
-        loads.push(load(iterator));
-      }
-      Promise.all(loads).then(() => {
-        if (!this.renderRequested) this.renderTimer();
-        else this.animate();
-        if (typeof this.onload === 'function') this.onload(this);
-      });
-    }
   }
   /**
    * 渲染通道
@@ -704,7 +682,7 @@ export default class K3d extends Events {
    */
   initComposer() {
     if (!this.renderScene) this.initRenderPass();
-    this.effectComposer = new EffectComposer(this.renderer);
+    this.effectComposer = new EffectComposer(this.render);
     this.effectComposer.setPixelRatio(window.devicePixelRatio);
     this.effectComposer.setSize(this.width, this.height);
     this.effectComposer.addPass(this.renderScene);
@@ -820,8 +798,8 @@ export default class K3d extends Events {
   /**
    * 切换添加辉光物体
    */
-  toggleBloom(object: THREE.Object3D<THREE.Event>) {
-    object.layers.toggle(this.BLOOM_SCENE);
+  removeBloom(object: THREE.Object3D<THREE.Event>) {
+    object.layers.disable(this.BLOOM_SCENE);
   }
   // 创建部分辉光正常渲染的后期
   initFinalComposer() {
@@ -863,7 +841,7 @@ export default class K3d extends Events {
       'baseTexture'
     );
     finalPass.needsSwap = true;
-    this.finalComposer = new EffectComposer(this.renderer);
+    this.finalComposer = new EffectComposer(this.render);
     this.finalComposer.setPixelRatio(window.devicePixelRatio);
     this.finalComposer.setSize(this.width, this.height);
     this.finalComposer.addPass(this.renderScene);
@@ -875,7 +853,6 @@ export default class K3d extends Events {
    * @param option
    */
   initDof(option: k3d.DofParameter) {
-    if (!this.effectComposer) this.initComposer();
     const bokehPass = new BokehPass(this.scene, this.camera, {
       focus: option.focus || 1.0,
       aperture: option.aperture || 0.025,
@@ -925,10 +902,10 @@ export default class K3d extends Events {
       this.outlinePass.selectedObjects = Array.from(set);
     });
     for (const key in config) {
-      if (_.has(config, key) && _.has(this.outlinePass, key)) {
+      if (hasOwnProperty.call(config, key) && _.hasOwnProperty.call(this.outlinePass, key)) {
         if (['visibleEdgeColor', 'hiddenEdgeColor'].includes(key))
           this.outlinePass[key].set(config[key]); // 设置显示的颜色
-        else this.outlinePass[key] = config[key];
+        else (this.outlinePass as obj)[key] = config[key];
       }
     }
     this.effectComposer.addPass(this.outlinePass);
@@ -954,7 +931,7 @@ export default class K3d extends Events {
    * 点击拾取
    */
   bindEvent() {
-    const render = this.css3dRenderer || this.css2dRenderer || this.renderer;
+    const render = this.css3dRenderer || this.css2dRenderer || this.render;
     // 模拟点击事件
     render.domElement.onmousedown = () => {
       const _this = this;
@@ -964,7 +941,8 @@ export default class K3d extends Events {
           type: 'click',
           event: _this.getSelectObject(event),
         });
-        if (_this.renderRequested) _this.renderTimer();
+        console.log(event);
+        _this.timeRender();
       };
       // 当按下时间超过200ms,解绑鼠标放开事件
       let timer = setTimeout(() => {
@@ -995,49 +973,82 @@ export default class K3d extends Events {
           type: 'hover',
           event: mode,
         });
-        if (this.renderRequested) this.renderTimer();
+        this.timeRender();
       }, 150)
     );
   }
+  getSelectObject(event: MouseEvent, type = 'click'): THREE.Intersection<THREE.Object3D<THREE.Event>> {
+    // 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是 (-1 to +1)
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    // 计算鼠标在元素的位置，由鼠标对于窗口位置减去元素位置
+    let x = event.clientX - (event.target as HTMLElement).offsetLeft;
+    let y = event.clientY - (event.target as HTMLElement).offsetTop;
+    pointer.x = (x / this.width) * 2 - 1;
+    pointer.y = -(y / this.height) * 2 + 1;
+    // 通过摄像机和鼠标位置更新射线
+    raycaster.setFromCamera(pointer, this.camera as THREE.Camera);
+    // 计算物体和射线的焦点
+    const intersects = raycaster.intersectObjects(
+      type == 'click' ? Array.from(this.clickObjects) : Array.from(this.hoverObjects)
+    );
+    return intersects[0];
+  }
   /**
-   * 浏览器窗口变化执行
+   * 窗口变化执行，可被重写
+   * @param config 相机的默认参数
    */
-  onresize() {
-    this.width = this.domElement.clientWidth || window.innerWidth;
-    this.height = this.domElement.clientHeight || window.innerHeight;
+  onresize(config: obj) {
+    this.width = this.domElement?.clientWidth || window.innerWidth;
+    this.height = this.domElement?.clientHeight || window.innerHeight;
     if ((this.camera as THREE.OrthographicCamera).isOrthographicCamera) {
-      (this.camera as THREE.OrthographicCamera).left = this.width / -2;
-      (this.camera as THREE.OrthographicCamera).right = this.width / 2;
-      (this.camera as THREE.OrthographicCamera).top = this.height / 2;
-      (this.camera as THREE.OrthographicCamera).bottom = this.height / -2;
+      const {
+        left = this.width / -2,
+        right = this.width / 2,
+        top = this.height / 2,
+        bottom = this.height / -2,
+      } = config;
+      (this.camera as THREE.OrthographicCamera).left = left;
+      (this.camera as THREE.OrthographicCamera).right = right;
+      (this.camera as THREE.OrthographicCamera).top = top;
+      (this.camera as THREE.OrthographicCamera).bottom = bottom;
     } else {
-      (this.camera as THREE.PerspectiveCamera).aspect = this.width / this.height;
+      const { aspect = this.width / this.height } = config;
+      (this.camera as THREE.PerspectiveCamera).aspect = aspect;
     }
     this.camera.updateProjectionMatrix();
     if (this.outlinePass) this.outlinePass.resolution = new THREE.Vector2(this.width, this.height);
 
     this.effectComposer && this.effectComposer.setSize(this.width, this.height);
     this.finalComposer && this.finalComposer.setSize(this.width, this.height);
-    this.renderer.setSize(this.width, this.height);
+    this.render.setSize(this.width, this.height);
     this.css2dRenderer && this.css2dRenderer.setSize(this.width, this.height);
     this.css3dRenderer && this.css3dRenderer.setSize(this.width, this.height);
-    if (!this.renderRequested) this.renderTimer();
+    this.timeRender();
+  }
+  // 更新渲染并在time后停止
+  timeRender(time = 3000) {
+    if (this.timeRenderTimer || this.renderEnabled) return;
+    this.timeRenderTimer = window.setTimeout(() => {
+      clearTimeout(this.timeRenderTimer);
+      this.timeRenderTimer = null;
+    }, time);
+    this.animate();
+  }
+  // 截屏
+  screenCapture() {
+    this.render.render(this.scene, this.camera as THREE.Camera);
+    const herf = this.render.domElement.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.download = Date.now() + '.png';
+    a.href = herf;
+    a.click();
   }
   /**
-   * 限时开启动画帧
+   * 更新渲染
    */
-  renderTimer() {
-    if (!this.renderRequested) {
-      this.renderRequested = true;
-      setTimeout(() => {
-        this.renderRequested = false;
-      }, 3000);
-    }
-  }
-  /**
-   * 渲染函数
-   */
-  render() {
+  animate() {
+    if ((this.renderEnabled || this.timeRenderTimer) && this.domElement) requestAnimationFrame(() => this.animate());
     this.emit('loop');
     if (this.stats) this.stats.update();
     const delta = this.clock.getDelta();
@@ -1047,7 +1058,7 @@ export default class K3d extends Events {
       // 如果有部分辉光
       if (this.finalComposer) this.bloomAnimate();
       else this.effectComposer.render(delta);
-    } else this.renderer.render(this.scene, this.camera);
+    } else this.render.render(this.scene, this.camera);
     this.css2dRenderer && this.css2dRenderer.render(this.scene, this.camera);
     this.css3dRenderer && this.css3dRenderer.render(this.scene, this.camera);
     for (const iterator of this.mixers) {
@@ -1083,83 +1094,11 @@ export default class K3d extends Events {
     // 4. 用 finalComposer 作最后渲染
     this.finalComposer.render();
   }
-  /**
-   * 动画帧
-   */
-  animate() {
-    if (this.renderRequested) {
-      this.render();
-      requestAnimationFrame(() => this.animate && this.animate());
-    }
-  }
-
-  /**
-   * 模型加载
-   * @param url
-   * @returns
-   */
-  modelLoad(url: string): Promise<THREE.Mesh> {
-    return new Promise((reslove, reject) => {
-      try {
-        modeLoader(url, (mode, mixer, mixerActions) => {
-          if (mixer) this.mixers.push(mixer);
-          if (mixerActions) this.mixerActions[mode.name] = mixerActions;
-          this.scene.add(mode);
-          mode.traverse((child: any) => {
-            if (child.isMesh && this.renderer?.shadowMap?.enabled) {
-              child.castShadow = true;
-              child.receiveShadow = false;
-            }
-          });
-          this.modes.push(mode);
-          reslove(mode);
-        });
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-  /**
-   * 鼠标选取对象
-   * @param event
-   * @param type
-   * @returns
-   */
-  getSelectObject(event: MouseEvent, type = 'click'): THREE.Intersection<THREE.Object3D<THREE.Event>> {
-    // 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是 (-1 to +1)
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    // 计算鼠标在元素的位置，由鼠标对于窗口位置减去元素位置
-    let x = event.clientX - (event.target as HTMLElement).offsetLeft;
-    let y = event.clientY - (event.target as HTMLElement).offsetTop;
-    pointer.x = (x / this.width) * 2 - 1;
-    pointer.y = -(y / this.height) * 2 + 1;
-    // 通过摄像机和鼠标位置更新射线
-    raycaster.setFromCamera(pointer, this.camera as THREE.Camera);
-    // 计算物体和射线的焦点
-    const intersects = raycaster.intersectObjects(
-      type == 'click' ? Array.from(this.clickObjects) : Array.from(this.hoverObjects)
-    );
-    return intersects[0];
-  }
-  // 截屏
-  screenCapture() {
-    this.renderer.render(this.scene, this.camera as THREE.Camera);
-    const herf = this.renderer.domElement.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.download = Date.now() + '.png';
-    a.href = herf;
-    a.click();
-  }
-  /**
-   * 销毁
-   */
   dispose() {
     this.domElement = null;
-    window.removeEventListener('resize', this._onresize);
-    this.renderRequested = false;
     this.scene.traverse((child: any) => {
       child.dispose && child.dispose();
     });
   }
 }
+export default K3d;

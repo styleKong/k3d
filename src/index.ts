@@ -61,7 +61,7 @@ for (let index = 0; index < list.length; index++) {
 
   li.setAttribute('data-index', index.toString());
   li.setAttribute('title', list[index].name);
-  if (index === 3) {
+  if (index === 1) {
     li.style.color = 'red';
     k3d = list[index].initk3d(container);
   }
@@ -74,6 +74,7 @@ for (let index = 0; index < list.length; index++) {
     container.innerHTML = '';
     if (k3d) k3d.dispose();
     k3d = list[index].initk3d(container);
+    console.log(k3d);
   };
   li.textContent = list[index].name;
   ul.append(li);

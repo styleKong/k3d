@@ -34,10 +34,10 @@ export default function (container) {
         gui: true,
       },
     },
-    renderEnabled: false,
+    renderRequested: false,
     models: ['./models/gltf/PrimaryIonDrive.glb'],
     onprogress(gltf: THREE.Mesh | THREE.Group) {
-      k3d.renderEnabled = true;
+      k3d.renderRequested = true;
       (gltf as Record<string, any>).mixerActions[0].play();
     },
     onload(k3d: K3d) {

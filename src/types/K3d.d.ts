@@ -78,12 +78,21 @@ declare namespace k3d {
     outputColorSpace?: THREE.ColorSpace;
     outputEncoding?: THREE.TextureEncoding;
     toneMappingExposure?: number;
+    autoClear?: boolean;
+    autoClearColor?: boolean;
+    autoClearDepth?: boolean;
+    autoClearStencil?: boolean;
+    localClippingEnabled?: boolean;
+    clippingPlanes?: number[];
+    useLegacyLights?: boolean;
+    sortObjects?: boolean;
     gui?: boolean;
   }
   export interface SceneParameters {
-    background?: url | color;
+    background?: url | color | THREE.Texture;
     backgroundBlurriness?: number;
     environment?: url | THREE.Texture;
+    overrideMaterial?: THREE.Material;
     gui?: boolean;
   }
   export type CameraParameters = OrthographicCameraParameters | PerspectiveCameraParameters;
@@ -262,10 +271,10 @@ type k3dParam = {
    */
   domElement?: string | HTMLElement;
   /**
-   *  始终更新渲染
+   *  开启动画帧
    * @default false
    */
-  renderEnabled?: boolean;
+  renderRequested?: boolean;
   /**
    *  帧率显示
    *  @default false
@@ -287,6 +296,7 @@ type k3dParam = {
    * {@link k3d.WebGLRendererParameters}
    */
   scene?: k3d.SceneParameters;
+  sky?: string | string[];
   fog?: k3d.FogParameters;
   camera?: k3d.CameraParameters;
   light?: k3d.LightParameters;
