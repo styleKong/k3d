@@ -31,6 +31,11 @@ export default async function (
       loader = new ThreeMFLoader();
       break;
     }
+    case 'fbx': {
+      const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
+      loader = new FBXLoader();
+      break;
+    }
   }
 
   // 如果没有找到对应后缀的加载器，返回

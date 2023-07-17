@@ -1,10 +1,8 @@
 import K3d from '../core/index';
 import * as THREE from 'three';
 export default function (container) {
-  const k3d = new K3d({
-    gui: true,
+  const k3d = new K3d(container, {
     stats: true,
-    domElement: container,
     render: {
       antialias: true,
       toneMapping: THREE.ReinhardToneMapping,
@@ -16,31 +14,27 @@ export default function (container) {
     },
     bloom: {
       strength: 1.5,
-      radius: 0.26,
+      radius: 0,
       threshold: 0,
       gui: true,
     },
-    camera: {
-      type: 'PerspectiveCamera',
+    perspectiveCamera: {
       fov: 40,
       far: 100,
       near: 1,
       position: [-5, 2.5, -3.5],
       gui: true,
     },
-    light: {
-      AmbientLight: {
-        color: '#404040',
-        gui: true,
-      },
+    ambientLight: {
+      color: 0x404040,
+      gui: true,
     },
-    renderRequested: false,
+    renderRequested: true,
     models: ['./models/gltf/PrimaryIonDrive.glb'],
     onprogress(gltf: THREE.Mesh | THREE.Group) {
-      k3d.renderRequested = true;
       (gltf as Record<string, any>).mixerActions[0].play();
     },
-    onload(k3d: K3d) {
+    onLoad(k3d: K3d) {
       const pointLight = new THREE.PointLight(0xffffff, 1);
       k3d.camera.add(pointLight);
     },

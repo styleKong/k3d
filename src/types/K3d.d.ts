@@ -31,10 +31,7 @@ declare namespace k3d {
     gui?: boolean;
   }
   interface OrthographicCameraParameters extends camera {
-    left?: number;
-    right?: number;
-    top?: number;
-    bottom?: number;
+    offset?: number;
   }
   interface PerspectiveCameraParameters extends camera {
     /**
@@ -54,6 +51,13 @@ declare namespace k3d {
     focus?: number;
   }
 
+  interface CubeCameraParameters {
+    near?: number;
+    far?: number;
+    renderTarget?: THREE.WebGLCubeRenderTarget;
+    gui?: boolean;
+  }
+
   interface light {
     color?: color;
     intensity?: number;
@@ -61,12 +65,27 @@ declare namespace k3d {
     gui?: boolean;
   }
 
-  interface DirectionalLight extends light {
+  interface DirectionalLightParameters extends light {
     target?: numberArray3;
   }
 
-  interface HemisphereLight extends light {
+  interface HemisphereLightParameters extends light {
     groundColor?: color;
+  }
+  interface PointLightParameters extends light {
+    distance?: number;
+    decay?: number;
+  }
+  interface RectAreaLightParameters extends light {
+    width?: number;
+    height?: number;
+  }
+  interface SpotLightParameters extends light {
+    distance?: number;
+    angle?: number;
+    penumbra?: number;
+    decay?: number;
+    target?: numberArray3;
   }
   export type numberArray3 = [number, number, number];
   /**
@@ -98,8 +117,8 @@ declare namespace k3d {
   export type CameraParameters = OrthographicCameraParameters | PerspectiveCameraParameters;
   export interface LightParameters {
     AmbientLight?: light;
-    DirectionalLight?: DirectionalLight;
-    HemisphereLight?: HemisphereLight;
+    DirectionalLight?: DirectionalLightParameters;
+    HemisphereLight?: HemisphereLightParameters;
   }
   export interface ControlsParameters {
     target?: numberArray3;
@@ -240,15 +259,15 @@ declare namespace k3d {
     visibleEdgeColor?: color;
     hiddenEdgeColor?: color;
     usePatternTexture?: boolean;
+    gui?: boolean;
   }
   export interface ShadowParameters {
     size?: number;
     near?: number;
     far?: number;
-    top?: number;
-    bottom?: number;
-    left?: number;
-    right?: number;
+    offset?: number;
+    focus?: number;
+    gui?: boolean;
   }
   export interface FogParameters {
     color?: color;
@@ -265,13 +284,9 @@ declare namespace k3d {
 }
 
 type k3dParam = {
+  domElement?: HTMLElement;
   /**
-   * k3d容器
-   * @default document.body
-   */
-  domElement?: string | HTMLElement;
-  /**
-   *  开启动画帧
+   *  按需渲染
    * @default false
    */
   renderRequested?: boolean;
@@ -281,11 +296,6 @@ type k3dParam = {
    */
   stats?: boolean;
   /**
-   *  图形属性控制器
-   *  @default false
-   */
-  gui?: boolean;
-  /**
    * 渲染器属性
    * {@link k3d.WebGLRendererParameters}
    */
@@ -293,13 +303,16 @@ type k3dParam = {
 
   /**
    * 场景属性
-   * {@link k3d.WebGLRendererParameters}
+   * {@link k3d.SceneParameters}
    */
   scene?: k3d.SceneParameters;
   sky?: string | string[];
   fog?: k3d.FogParameters;
-  camera?: k3d.CameraParameters;
-  light?: k3d.LightParameters;
+  perspectiveCamera?: k3d.PerspectiveCameraParameters;
+  orthographicCamera?: k3d.OrthographicCameraParameters;
+  ambientLight?: { color?: k3d.color; intensity?: number; gui?: boolean };
+  directionalLight?: k3d.DirectionalLightParameters;
+  hemisphereLight?: k3d.HemisphereLightParameters;
   controls?: k3d.ControlsParameters;
   shadow?: k3d.ShadowParameters;
   dof?: k3d.DofParameter;
@@ -307,6 +320,6 @@ type k3dParam = {
   models?: string[] | string;
   bloom?: k3d.BloomParameters;
   outline?: k3d.OutLineParameters;
-  onload?: (scene: object) => void;
+  onLoad?: (scene: any) => void;
   onprogress?: (gltf: THREE.Group | THREE.Mesh) => void;
 };

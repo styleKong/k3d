@@ -7,29 +7,27 @@ export default function (container) {
     singleMaterial = false,
     zmaterial,
     nobjects;
+
   const materials = [],
     objects = [];
-  const k3d = new K3d({
-    gui: true,
+
+  const k3d = new K3d(container, {
     stats: true,
-    domElement: container,
     render: {},
+    scene: {},
     dof: {
       focus: 500.0,
       aperture: 5,
       maxblur: 0.01,
     },
-    camera: {
-      type: 'PerspectiveCamera',
+    perspectiveCamera: {
       near: 1,
       fov: 70,
       far: 3000,
       position: [0, 200, 0],
       gui: true,
     },
-    onload(k3d: K3d) {
-      console.log(k3d);
-
+    onLoad(k3d: K3d) {
       k3d.renderer.autoClear = false;
       const path = './textures/cube/SwedishRoyalCastle/';
       const format = '.jpg';
@@ -96,7 +94,7 @@ export default function (container) {
     mouseX = event.clientX - k3d.width / 2;
     mouseY = event.clientY - k3d.height / 2;
   });
-  k3d.on('loop', () => {
+  k3d.addEventListener('loop', () => {
     const time = Date.now() * 0.00005;
     k3d.camera.position.x += (mouseX - k3d.camera.position.x) * 0.036;
     k3d.camera.position.y += (-mouseY - k3d.camera.position.y) * 0.036;

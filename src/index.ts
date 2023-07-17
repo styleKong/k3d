@@ -4,6 +4,7 @@ import webgl_animation_skinning_additive_blending from './examples/webgl_animati
 import webgl_postprocessing_dof from './examples/webgl_postprocessing_dof';
 import webgl_postprocessing_unreal_bloom from './examples/webgl_postprocessing_unreal_bloom';
 import webgl_postprocessing_unreal_bloom_selective from './examples/webgl_postprocessing_unreal_bloom_selective';
+import webgl_city_fbx from './examples/webgl_city_fbx';
 // webgl_postprocessing_unreal_bloom_selective(document.body);
 document.body.style.width = '100%';
 document.body.style.height = '100vh';
@@ -34,6 +35,10 @@ const list = [
     initk3d: webgl_postprocessing_unreal_bloom_selective,
     name: 'webgl_postprocessing_unreal_bloom_selective',
   },
+  {
+    initk3d: webgl_city_fbx,
+    name: 'webgl_city_fbx',
+  },
 ];
 const ul = document.createElement('ul');
 ul.style.width = '200px';
@@ -61,7 +66,7 @@ for (let index = 0; index < list.length; index++) {
 
   li.setAttribute('data-index', index.toString());
   li.setAttribute('title', list[index].name);
-  if (index === 1) {
+  if (index === 6) {
     li.style.color = 'red';
     k3d = list[index].initk3d(container);
   }
@@ -74,7 +79,6 @@ for (let index = 0; index < list.length; index++) {
     container.innerHTML = '';
     if (k3d) k3d.dispose();
     k3d = list[index].initk3d(container);
-    console.log(k3d);
   };
   li.textContent = list[index].name;
   ul.append(li);

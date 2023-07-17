@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-export default async function (url: string, fn: (textrue: any) => void) {
+export default async function (url: string) {
   let loader;
   if (/hdr$/i.test(url)) {
     const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
@@ -7,5 +7,5 @@ export default async function (url: string, fn: (textrue: any) => void) {
   } else {
     loader = new THREE.TextureLoader();
   }
-  loader.load(url, fn);
+  return loader.load(url);
 }
