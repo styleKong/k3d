@@ -1,4 +1,4 @@
-import { Layers, ShaderMaterial, WebGLRenderTarget, WebGLRenderer } from 'three'
+import { Layers, ShaderMaterial, WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import type { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -13,7 +13,6 @@ export default class FinalComposer {
   renderer!: WebGLRenderer
   renderPass!: RenderPass
   bloomLayer!: Layers
-  renderTarget?: WebGLRenderTarget
   domElement!: HTMLElement
   materials: { [key: string]: THREE.Material } = {}
   darkMaterials: { [key: string]: THREE.Material } = {}
@@ -23,14 +22,12 @@ export default class FinalComposer {
     effectComposer: EffectComposer,
     renderer: WebGLRenderer,
     renderPass: RenderPass,
-    renderTarget?: WebGLRenderTarget,
     domElement?: HTMLElement
   ) {
     this.effectComposer = effectComposer
     this.renderer = renderer
     this.renderPass = renderPass
     this.domElement = domElement || renderer.domElement
-    this.renderTarget = renderTarget
   }
   create() {
     // 产生辉光的后期不渲染到屏幕
@@ -69,7 +66,7 @@ export default class FinalComposer {
       'baseTexture'
     )
     finalPass.needsSwap = true
-    this.finalComposer = new EffectComposer(this.renderer, this.renderTarget)
+    this.finalComposer = new EffectComposer(this.renderer)
     this.finalComposer.setPixelRatio(window.devicePixelRatio)
     this.finalComposer.setSize(this.domElement.clientWidth, this.domElement.clientWidth)
     this.finalComposer.addPass(this.renderPass)

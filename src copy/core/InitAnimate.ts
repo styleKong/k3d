@@ -3,8 +3,6 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 import type { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import type { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import type { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
-import Stats from 'three/examples/jsm/libs/stats.module.js'
-import type { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 
 /**
  *  创建渲染动画
@@ -22,13 +20,9 @@ export default class InitAnimate extends EventDispatcher {
   css3dRenderer?: CSS3DRenderer
   effectComposer?: EffectComposer
   demand: boolean = false
-  renderRequested: boolean = false
   clock = new Clock()
   renderEvent = () => {
-    if (!this.renderRequested) {
-      this.renderRequested = true
-      requestAnimationFrame(() => this.render())
-    }
+    this.render()
   }
   constructor(config: {
     scene: THREE.Scene
@@ -41,8 +35,6 @@ export default class InitAnimate extends EventDispatcher {
     css3dRenderer?: CSS3DRenderer
     // 是否按需渲染
     demand?: boolean
-    stats?: Stats
-    gui?: GUI
   }) {
     super()
     this.contorls = config.contorls
@@ -52,12 +44,10 @@ export default class InitAnimate extends EventDispatcher {
     if (config.effectComposer) this.effectComposer = config.effectComposer
     if (config.css2dRenderer) this.css2dRenderer = config.css2dRenderer
     if (config.css3dRenderer) this.css3dRenderer = config.css3dRenderer
-    if (config.stats) this.stats = config.stats
     if (config.demand) this.demand = config.demand
     if (config.demand) {
       this.contorls.addEventListener('change', this.renderEvent)
       window.addEventListener('resize', this.renderEvent)
-      if (config.gui) config.gui.onChange(this.renderEvent)
       this.renderEvent()
     } else this.animate()
   }
@@ -71,7 +61,6 @@ export default class InitAnimate extends EventDispatcher {
     this.render()
   }
   render() {
-    if (this.demand) this.renderRequested = false
     const delta = this.clock.getDelta()
     if (this.stats) this.stats.update()
     this.contorls.update()

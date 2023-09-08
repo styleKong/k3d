@@ -1,85 +1,31 @@
-import webgl_animation_keyframes from './examples/webgl_animation_keyframes';
-import webgl_animation_skinning_blending from './examples/webgl_animation_skinning_blending';
-import webgl_animation_skinning_additive_blending from './examples/webgl_animation_skinning_additive_blending';
-import webgl_postprocessing_dof from './examples/webgl_postprocessing_dof';
-import webgl_postprocessing_unreal_bloom from './examples/webgl_postprocessing_unreal_bloom';
-import webgl_postprocessing_unreal_bloom_selective from './examples/webgl_postprocessing_unreal_bloom_selective';
-import webgl_city_fbx from './examples/webgl_city_fbx';
-// webgl_postprocessing_unreal_bloom_selective(document.body);
-document.body.style.width = '100%';
-document.body.style.height = '100vh';
-document.body.style.display = 'flex';
-document.body.style.margin = '0';
-const list = [
-  {
-    initk3d: webgl_animation_keyframes,
-    name: 'webgl_animation_keyframes',
-  },
-  {
-    initk3d: webgl_animation_skinning_blending,
-    name: 'webgl_animation_skinning_blending',
-  },
-  {
-    initk3d: webgl_animation_skinning_additive_blending,
-    name: 'webgl_animation_skinning_additive_blending',
-  },
-  {
-    initk3d: webgl_postprocessing_dof,
-    name: 'webgl_postprocessing_dof',
-  },
-  {
-    initk3d: webgl_postprocessing_unreal_bloom,
-    name: 'webgl_postprocessing_unreal_bloom',
-  },
-  {
-    initk3d: webgl_postprocessing_unreal_bloom_selective,
-    name: 'webgl_postprocessing_unreal_bloom_selective',
-  },
-  {
-    initk3d: webgl_city_fbx,
-    name: 'webgl_city_fbx',
-  },
-];
-const ul = document.createElement('ul');
-ul.style.width = '200px';
-ul.style.height = '100%';
-ul.style.overflowY = 'auto';
-ul.style.margin = '0';
-ul.style.padding = '0';
-const container = document.createElement('div');
-container.style.height = '100%';
-container.style.flex = '1';
-container.style.margin = '0';
-document.body.append(ul);
-document.body.append(container);
-let k3d;
-for (let index = 0; index < list.length; index++) {
-  const li = document.createElement('li');
-  li.style.margin = '0';
-  li.style.fontSize = '14px';
-  li.style.listStyle = 'none';
-  li.style.height = '32px';
-  li.style.lineHeight = '32px';
-  li.style.textOverflow = 'ellipsis';
-  li.style.whiteSpace = 'nowrap';
-  li.style.overflow = 'hidden';
+const container = document.body;
+container.style.width = '100%';
+container.style.height = '100vh';
 
-  li.setAttribute('data-index', index.toString());
-  li.setAttribute('title', list[index].name);
-  if (index === 6) {
-    li.style.color = 'red';
-    k3d = list[index].initk3d(container);
-  }
-  li.onclick = function (ev) {
-    let index: number = Number((ev.target as HTMLElement).getAttribute('data-index'));
-    ul.querySelectorAll('li').forEach((label) => {
-      if (label !== li) label.style.color = '#000000';
-      else li.style.color = 'red';
-    });
-    container.innerHTML = '';
-    if (k3d) k3d.dispose();
-    k3d = list[index].initk3d(container);
-  };
-  li.textContent = list[index].name;
-  ul.append(li);
-}
+import initRender from '../src copy/core/initRender';
+import ResourceTracker from './core/ResourceTracker';
+import initCamera from './core/initCamera';
+import initControls from './core/initControls';
+import initLight from './core/initLight';
+import initRenderer from './core/initRenderer';
+import initScene from './core/initScene';
+const tracker = new ResourceTracker(container);
+
+const scene = tracker.track(initScene());
+const camera = tracker.track(
+  initCamera(scene, 'PerspectiveCamera', {
+    far: 70,
+    aspect: window.innerWidth / window.innerHeight,
+    near: 1,
+    fov: 1000,
+    position: [0, 0, 5],
+  })
+);
+const light = tracker.track(
+  initLight(scene, 'AmbientLight', {
+    color: 0xffffff,
+    intensity: 2,
+  })
+);
+const renderer = tracker.track(initRenderer(container, { alpha: true }));
+const controls = tracker.track(initControls(camera, renderer));

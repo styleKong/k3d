@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+
 export default async function (
   url: string,
   onload: (mode: THREE.Mesh, mixer?: THREE.AnimationMixer, mixerActions?: THREE.AnimationAction[]) => void

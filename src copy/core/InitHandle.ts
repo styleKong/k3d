@@ -11,8 +11,6 @@ export default class InitHandle extends EventDispatcher {
   hoverObjects!: THREE.Object3D<THREE.Event>[]
   renderer!: WebGLRenderer
   camera!: THREE.PerspectiveCamera | THREE.OrthographicCamera
-  clickNum: number = 0
-  clickTimer: number | null = null
   constructor(
     renderer: WebGLRenderer,
     camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
@@ -29,36 +27,20 @@ export default class InitHandle extends EventDispatcher {
   // 绑定点击事件
   bindClick = () => {
     const _this = this
-    if (this.clickTimer) clearTimeout(this.clickTimer)
     // 鼠标松开触发
     function mouseup(event: MouseEvent) {
-      _this.clickNum++
-      // 解绑鼠标放开事件
-      _this.renderer.domElement.removeEventListener('mouseup', mouseup)
-      if (_this.clickTimer) clearTimeout(_this.clickTimer)
-      _this.clickTimer = setTimeout(() => {
-        clearTimeout(_this.clickTimer as number)
-        const target = _this.getSelectObject(event, _this.clickObjects)
-        if (target) {
-          if (_this.clickNum == 1)
-            _this.dispatchEvent({
-              type: 'click',
-              ...target
-            })
-          else if (_this.clickNum == 2)
-            _this.dispatchEvent({
-              type: 'dbclick',
-              ...target
-            })
-        }
-        _this.clickNum = 0
-      }, 200)
+      const target = _this.getSelectObject(event, _this.clickObjects)
+      if (target)
+        _this.dispatchEvent({
+          type: 'click',
+          ...target
+        })
     }
     this.renderer.domElement.addEventListener('mouseup', mouseup)
 
     // 当按下时间超过200ms,解绑鼠标放开事件
-    this.clickTimer = setTimeout(() => {
-      clearTimeout(_this.clickTimer as number)
+    const timer = setTimeout(() => {
+      clearTimeout(timer)
       this.renderer.domElement.removeEventListener('mouseup', mouseup)
     }, 200)
   }
